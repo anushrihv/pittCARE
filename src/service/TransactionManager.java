@@ -1,4 +1,5 @@
 package src.service;
+
 import java.io.*;
 import java.util.*;
 
@@ -53,7 +54,7 @@ public class TransactionManager {
                         op.setTransactionID(transactionTable.get(files.get(k)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(k)).getIsolationLevel());
                         op.setOperation(operations[k]);
-                        System.out.println(op); //TODO Send operation to Scheduler
+                        System.out.println(op.toString()); //TODO Send operation to Scheduler
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(k));
                             fileNames.remove(files.get(k));
@@ -89,6 +90,55 @@ public class TransactionManager {
 
     private static void randomReading(int seed) throws IOException {
         Random rand = new Random(seed);
+
+        // Opening a BufferedReader for each file
+        BufferedReader[] readers = new BufferedReader[files.size()];
+
+        int filesIP = files.size();
+
+        while (filesIP != 0) {
+            // Opening a random file to read
+            int index = rand.nextInt(files.size());
+            String randomFile = files.get(index);
+            // Initializing BufferedReader object for the file if it doesn't exist
+            if (readers[index].ready()) {
+                readers[index] = new BufferedReader(new FileReader(randomFile));
+            }
+            // Getting a random number of lines to ready from the file with upper bound of total lines in files
+            //TODO should we change upper bound to total lines subtracted by lines read???????????
+            int randomNumOfLines = rand.nextInt((int) totalLinesInFile(randomFile));
+
+            for (int i = 0; i < randomNumOfLines; i++) {
+                if (readers[index].ready()) {
+                    String operation = readers[index].readLine();
+                    String[] splitString = operation.split(" ");
+                    if (splitString[0].equals("B")) {
+                        addToTransactionTable(files.get(index), splitString[1]);
+                        fileNames.add(files.get(index));
+                    } else {
+                        Operation op = new Operation();
+                        op.setTransactionID(transactionTable.get(files.get(index)).getTransactionID());
+                        op.setIsolationLevel(transactionTable.get(files.get(index)).getIsolationLevel());
+                        op.setOperation(operation);
+                        System.out.println(op); //TODO Send operation to Scheduler
+                        if (splitString[0].equals("C") || splitString[0].equals("A")) {
+                            transactionTable.remove(files.get(index));
+                            fileNames.remove(files.get(index));
+                        }
+                    }
+                } else {
+                    filesIP--; // remove a file count from files in progress (filesIP)
+                    break; // break if no lines left to read
+                }
+            }
+        }
+
+        // TODO change duplicate code, modularize
+
+        // Closing the BufferedReaders
+        for (BufferedReader reader : readers) {
+            reader.close();
+        }
 
     }
 
