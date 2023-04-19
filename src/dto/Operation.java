@@ -5,6 +5,12 @@ public class Operation {
     public Operation() {
     }
 
+    public Operation(int transactionID, int isolationLevel, String operationStr) {
+        this.transactionID = transactionID;
+        this.isolationLevel = isolationLevel;
+        this.operationStr = operationStr;
+    }
+
     private int transactionID;
     private int isolationLevel;
     private String operationStr;
@@ -59,6 +65,11 @@ public class Operation {
     public boolean isCommitOperation() {
         char operation = getOperationStr().charAt(0);
         return operation == 'C';
+    }
+
+    public boolean isAbortOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'A';
     }
 
     public Integer getSensorID() {

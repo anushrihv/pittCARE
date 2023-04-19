@@ -44,8 +44,23 @@ public class Scheduler {
             Operation operationToSend = null;
             do {
                 operationToSend = resolveWaitingTransaction(sensorID);
-                sendOperationToDataManager(operationToSend);
+                if (operationToSend != null) {
+                    lockTable.get(sensorID).getWaitingTransactions().remove(operationToSend.getTransactionID());
+                    sendOperationToDataManager(operationToSend);
+                }
             } while (operationToSend != null);
+        }
+    }
+
+    public static void printLockTable() {
+        for (int sensorID: lockTable.keySet()) {
+            System.out.println(" ::::::::: Lock table for sensor ID " + sensorID + " ::::::::::");
+            LockDetails lockDetails = lockTable.get(sensorID);
+            System.out.println("Current lock type " + lockDetails.getLockType());
+            System.out.println("Write lock owner " + lockDetails.getWriteLockOwner());
+            System.out.println("Read lock owners " + lockDetails.getReadLockOwners());
+            System.out.println("Waiting transactions " + lockDetails.getWaitingTransactions());
+            System.out.println();
         }
     }
 
@@ -73,24 +88,24 @@ public class Scheduler {
             if (waitingTransactionIfAny.isPresent()) {
                 // get any waiting transaction
                 int waitingTransaction = waitingTransactionIfAny.get();
-                operationToSend = transactionOperations.get(waitingTransaction).get(0);
-                transactionOperations.get(waitingTransaction).remove(0);
+                operationToSend = getAndRemoveNextOperationToSchedule(waitingTransaction);
                 transferLockOwnership(lockDetails, getLockTypeByOperation(operationToSend.getOperation()),
                         waitingTransaction);
             }
         } else {
             // if a transaction holds a lock (R or W), and new operations are available, schedule that operation
             operationToSend = findOperationToScheduleForExistingOwners(lockDetails);
-            if (operationToSend != null && operationToSend.isCommitOperation()) {
+            if (operationToSend != null && (operationToSend.isCommitOperation() || operationToSend.isAbortOperation())) {
                 releaseLock(operationToSend.getTransactionID(), lockDetails);
+            } else if (operationToSend != null) {
+                return operationToSend;
             } else {
                 // no new operations could be scheduled for existing owners
                 // find new transactions without conflicting locks
                 Integer waitingTransactionWithoutConflict = findWaitingTransactionWithNonConflictingOperations(lockDetails);
                 if (waitingTransactionWithoutConflict != null) {
-                    operationToSend = transactionOperations.get(waitingTransactionWithoutConflict).get(0);
-                    transactionOperations.get(waitingTransactionWithoutConflict).remove(0);
                     addWaitingTransactionAsLockOwner(waitingTransactionWithoutConflict, lockDetails);
+                    operationToSend = getAndRemoveNextOperationToSchedule(waitingTransactionWithoutConflict);
                 }
             }
         }
@@ -135,9 +150,6 @@ public class Scheduler {
         } else {
             lockDetails.setWriteLockOwner(waitingTransactionID);
         }
-
-        // remove it from waiting transactions list
-        lockDetails.getWaitingTransactions().remove(waitingTransactionID);
     }
 
     /**
@@ -178,6 +190,7 @@ public class Scheduler {
         if (transactionOperations.get(transactionID).size() > 0) {
             Operation nextOperation = transactionOperations.get(transactionID).get(0);
             transactionOperations.get(transactionID).remove(0);
+            return nextOperation;
         }
 
         return null;
@@ -232,8 +245,6 @@ public class Scheduler {
         } else {
             lockDetails.getReadLockOwners().add(newTransactionID);
         }
-
-        lockDetails.getWaitingTransactions().remove(newTransactionID);
     }
 
     private static LockType getLockTypeByOperation(char operation) {
@@ -247,7 +258,9 @@ public class Scheduler {
     }
 
     private static void createLockTableEntryIfNotExists(int sensorID) {
-        lockTable.put(sensorID, new LockDetails());
+        if (!lockTable.containsKey(sensorID)) {
+            lockTable.put(sensorID, new LockDetails());
+        }
     }
 
     private static void addTransactionOperation(Operation operation) {
