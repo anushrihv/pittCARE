@@ -53,7 +53,7 @@ public class TransactionManager {
                         Operation op = new Operation();
                         op.setTransactionID(transactionTable.get(files.get(k)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(k)).getIsolationLevel());
-                        op.setOperation(operations[k]);
+                        op.setOperationStr(operations[k]);
                         System.out.println(op.toString()); //TODO Send operation to Scheduler
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(k));
@@ -119,7 +119,7 @@ public class TransactionManager {
                         Operation op = new Operation();
                         op.setTransactionID(transactionTable.get(files.get(index)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(index)).getIsolationLevel());
-                        op.setOperation(operation);
+                        op.setOperationStr(operation);
                         System.out.println(op); //TODO Send operation to Scheduler
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(index));

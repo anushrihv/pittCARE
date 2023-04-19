@@ -1,8 +1,6 @@
 package src;
 
 import src.service.TransactionManager;
-import src.dto.Operation;
-import src.service.Scheduler;
 import java.io.IOException;
 import java.util.Scanner;
 
@@ -22,5 +20,7 @@ public class Main {
 
         // Running the Transaction Manager:
         TransactionManager.getTransactions(seed, concurrencyType);
+
+        // TODO init number of pages
     }
 }
