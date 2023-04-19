@@ -5,9 +5,15 @@ public class Operation {
     public Operation() {
     }
 
+    public Operation(int transactionID, int isolationLevel, String operationStr) {
+        this.transactionID = transactionID;
+        this.isolationLevel = isolationLevel;
+        this.operationStr = operationStr;
+    }
+
     private int transactionID;
     private int isolationLevel;
-    private String operation;
+    private String operationStr;
 
     public int getTransactionID() {
         return transactionID;
@@ -25,11 +31,56 @@ public class Operation {
         this.isolationLevel = isolationLevel;
     }
 
-    public String getOperation() {
-        return operation;
+    public String getOperationStr() {
+        return operationStr;
     }
 
-    public void setOperation(String operation) {
-        this.operation = operation;
+    public void setOperationStr(String operationStr) {
+        this.operationStr = operationStr;
+    }
+
+    public boolean isTransaction() {
+        return isolationLevel == 1;
+    }
+
+    public boolean isProcess() {
+        return isolationLevel == 0;
+    }
+
+    public boolean isReadOrWriteOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'I' || operation == 'R' || operation == 'M' || operation == 'G';
+    }
+
+    public boolean isReadOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'R' || operation == 'M' || operation == 'G';
+    }
+
+    public boolean isWriteOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'I';
+    }
+
+    public boolean isCommitOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'C';
+    }
+
+    public boolean isAbortOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'A';
+    }
+
+    public Integer getSensorID() {
+        if (isReadOrWriteOperation()) {
+            return Integer.valueOf(operationStr.split(" ")[1]);
+        } else {
+            return null;
+        }
+    }
+
+    public char getOperation() {
+        return operationStr.charAt(0);
     }
 }
