@@ -1,16 +1,16 @@
 package src.dto;
 
-public class Record {
+public class SensorRecord {
     private int sensorID;
     private int xLocation;
     private int yLocation;
     private long timestamp;
     private int heartRate;
 
-    public Record() {
+    public SensorRecord() {
     }
 
-    public Record(int sensorID, int xLocation, int yLocation, long timestamp, int heartRate) {
+    public SensorRecord(int sensorID, int xLocation, int yLocation, long timestamp, int heartRate) {
         this.sensorID = sensorID;
         this.xLocation = xLocation;
         this.yLocation = yLocation;

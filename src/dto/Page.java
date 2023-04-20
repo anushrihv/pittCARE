@@ -3,19 +3,12 @@ package src.dto;
 import java.util.List;
 
 public class Page {
-    private int priority;
     private int blockNumber;
-    private List<Record> records;
+    private List<SensorRecord> sensorRecords;
 
-    public Page() {
-    }
-
-    public int getPriority() {
-        return priority;
-    }
-
-    public void setPriority(int priority) {
-        this.priority = priority;
+    public Page(int blockNumber, List<SensorRecord> sensorRecords) {
+        this.blockNumber = blockNumber;
+        this.sensorRecords = sensorRecords;
     }
 
     public int getBlockNumber() {
@@ -26,11 +19,11 @@ public class Page {
         this.blockNumber = blockNumber;
     }
 
-    public List<Record> getRecords() {
-        return records;
+    public List<SensorRecord> getRecords() {
+        return sensorRecords;
     }
 
-    public void setRecords(List<Record> records) {
-        this.records = records;
+    public void setRecords(List<SensorRecord> sensorRecords) {
+        this.sensorRecords = sensorRecords;
     }
 }
