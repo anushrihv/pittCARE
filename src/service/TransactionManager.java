@@ -54,7 +54,9 @@ public class TransactionManager {
                         op.setTransactionID(transactionTable.get(files.get(k)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(k)).getIsolationLevel());
                         op.setOperationStr(operations[k]);
-                        System.out.println(op.toString()); //TODO Send operation to Scheduler
+                        System.out.println(op.toString());
+                        //TODO Send operation to Scheduler
+                        Scheduler.scheduleOperation(op);
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(k));
                             fileNames.remove(files.get(k));
@@ -105,7 +107,7 @@ public class TransactionManager {
                 readers[index] = new BufferedReader(new FileReader(randomFile));
             }
             // Getting a random number of lines to ready from the file with upper bound of total lines in files
-            //TODO should we change upper bound to total lines subtracted by lines read???????????
+            // TODO should we change upper bound to total lines subtracted by lines read???????????
             int randomNumOfLines = rand.nextInt((int) totalLinesInFile(randomFile));
 
             for (int i = 0; i < randomNumOfLines; i++) {
@@ -120,7 +122,9 @@ public class TransactionManager {
                         op.setTransactionID(transactionTable.get(files.get(index)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(index)).getIsolationLevel());
                         op.setOperationStr(operation);
-                        System.out.println(op); //TODO Send operation to Scheduler
+                        System.out.println(op);
+                        //TODO Send operation to Scheduler
+                        Scheduler.scheduleOperation(op);
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(index));
                             fileNames.remove(files.get(index));
