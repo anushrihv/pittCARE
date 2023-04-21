@@ -4,6 +4,7 @@ import src.dto.LockType;
 import src.dto.LockDetails;
 import src.dto.Operation;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 
@@ -34,7 +35,7 @@ public class Scheduler {
      * send operation to data manager
      * @param operation
      */
-    public static void scheduleOperation(Operation operation) {
+    public static void scheduleOperation(Operation operation) throws IOException {
         addTransactionOperation(operation);
         Integer sensorID = operation.getSensorID();
         if(sensorID != null) {
@@ -64,7 +65,7 @@ public class Scheduler {
         }
     }
 
-    private static void sendOperationToDataManager(Operation operationToSend) {
+    private static void sendOperationToDataManager(Operation operationToSend) throws IOException {
         DataManager.executeOperation(operationToSend);
     }
 

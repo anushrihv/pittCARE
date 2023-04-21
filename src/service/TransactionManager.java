@@ -54,7 +54,12 @@ public class TransactionManager {
                         op.setTransactionID(transactionTable.get(files.get(k)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(k)).getIsolationLevel());
                         op.setOperationStr(operations[k]);
-                        System.out.println(op.toString());
+                        System.out.println("Printing operation:");
+                        System.out.println(op.getTransactionID());
+                        System.out.println(op.getIsolationLevel());
+                        System.out.println(op.getOperationStr());
+
+
                         //TODO Send operation to Scheduler
                         Scheduler.scheduleOperation(op);
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
@@ -101,9 +106,10 @@ public class TransactionManager {
         while (filesIP != 0) {
             // Opening a random file to read
             int index = rand.nextInt(files.size());
+
             String randomFile = files.get(index);
             // Initializing BufferedReader object for the file if it doesn't exist
-            if (readers[index].ready()) {
+            if (readers[index] == null) {
                 readers[index] = new BufferedReader(new FileReader(randomFile));
             }
             // Getting a random number of lines to ready from the file with upper bound of total lines in files
@@ -122,9 +128,14 @@ public class TransactionManager {
                         op.setTransactionID(transactionTable.get(files.get(index)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(index)).getIsolationLevel());
                         op.setOperationStr(operation);
-                        System.out.println(op);
+
                         //TODO Send operation to Scheduler
-                        Scheduler.scheduleOperation(op);
+                        //Scheduler.scheduleOperation(op);
+
+                        System.out.println("Printing operation:");
+                        System.out.println(op.getTransactionID());
+                        System.out.println(op.getIsolationLevel());
+                        System.out.println(op.getOperationStr());
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(index));
                             fileNames.remove(files.get(index));

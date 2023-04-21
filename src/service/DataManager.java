@@ -3,13 +3,14 @@ package src.service;
 import com.sun.source.tree.Tree;
 import src.dto.Operation;
 import src.dto.Page;
-import src.dto.SensorRecord;
 
 import java.io.BufferedWriter;
+import java.lang.reflect.Array;
 import java.util.*;
 
 import java.io.FileWriter;
 import java.io.IOException;
+
 import src.dto.SensorRecord;
 
 import java.io.*;
@@ -18,22 +19,26 @@ import java.util.*;
 
 public class DataManager {
     private static final int RECORD_SIZE = 24;
-    private static final int NUMBER_OF_RECORDS_IN_BLOCK = 20;
+    private static final int NUMBER_OF_RECORDS_IN_BLOCK = 3;
     private static final int BLOCK_SIZE = RECORD_SIZE * NUMBER_OF_RECORDS_IN_BLOCK;
-    private static LRUCache<String, Page> databaseBuffer;
+    public static LRUCache<String, Page> databaseBuffer;
     private static final Map<Integer, List<SensorRecord>> recoveryRecords = new HashMap<>();
     private static final Map<Integer, Integer> recordTracker = new HashMap<>();
     private static final String FILE_PREFIX = "src/output/";
 
-    private static Map<Integer, TreeMap<Long, Integer>> timeStampIndex = new HashMap<>();
-    private static Map<Integer, TreeMap<Integer, Integer>> xLocIndex = new HashMap<>();
-    private static Map<Integer, TreeMap<Integer, Integer>> yLocIndex = new HashMap<>();
-    private static Map<Integer, TreeMap<Integer, Integer>> heartRateIndex = new HashMap<>();
+    private static Map<Integer, TreeMap<Long, ArrayList<Integer>>> timeStampIndex = new HashMap<>();
+    private static Map<Integer, TreeMap<Integer, ArrayList<Integer>>> xLocIndex = new HashMap<>();
+    private static Map<Integer, TreeMap<Integer, ArrayList<Integer>>> yLocIndex = new HashMap<>();
+    public static Map<Integer, TreeMap<Integer, ArrayList<Integer>>> heartRateIndex = new HashMap<>();
 
+    private static TreeMap<Long, ArrayList<Integer>> timeStampTree = new TreeMap<>();
+    private static TreeMap<Integer, ArrayList<Integer>> xLocTree = new TreeMap<>();
+    private static TreeMap<Integer, ArrayList<Integer>> yLocTree = new TreeMap<>();
+    public static TreeMap<Integer, ArrayList<Integer>> heartRateTree = new TreeMap<>();
 
     private static BufferedWriter logWriter;
 
-    public static void executeOperation(Operation operation) {
+    public static void executeOperation(Operation operation) throws IOException {
         System.out.println("Operation received for transaction " + operation.getTransactionID() +
                 " for operation " + operation.getOperationStr());
         if (operation.isWriteOperation()) {
@@ -42,8 +47,14 @@ public class DataManager {
         } else if (operation.isCommitOperation()) {
             performCommit(operation.getTransactionID());
             recoveryRecords.remove(operation.getTransactionID());
-        } else if(operation.isAbortOperation()) {
+        } else if (operation.isAbortOperation()) {
             recoveryRecords.remove(operation.getTransactionID());
+        } else if (operation.isReadOperation()) {
+            readAllRecords(operation.getOperationStr(), operation.getTransactionID());
+        } else if (operation.isMOperation()) {
+            M(operation.getOperationStr());
+        } else if (operation.isGOperation()) {
+            G(operation.getOperationStr());
         }
     }
 
@@ -55,11 +66,12 @@ public class DataManager {
                 int blockNumber = getBlockNumber(sensorRecord.getSensorID());
                 Page page = updateMemory(sensorRecord, blockNumber);
                 updateDisk(page);
-                updateIndices(sensorRecord);
-
                 // increment the number of records written to the disk
                 recordTracker.put(sensorRecord.getSensorID(),
                         recordTracker.getOrDefault(sensorRecord.getSensorID(), 0) + 1);
+                updateIndices(sensorRecord);
+
+                //System.out.print(recordTracker.get(sensorRecord.getSensorID()));
             }
         }
     }
@@ -71,7 +83,7 @@ public class DataManager {
 
     private static Page bringBlockToBufferIfNotExists(int sensorID, int blockNumber) {
         String key = sensorID + "-" + blockNumber;
-        if(!databaseBuffer.containsKey(key)) {
+        if (!databaseBuffer.containsKey(key)) {
             // read the corresponding block in the file
             int startOffset = blockNumber * BLOCK_SIZE;
             int endOffset = startOffset + BLOCK_SIZE;
@@ -101,7 +113,7 @@ public class DataManager {
         try {
             FileInputStream inputStream = new FileInputStream(filePath);
             inputStream.skip(startOffset); // skip to the startOffset
-            byte[] buffer = new byte[(int)(endOffset - startOffset)];
+            byte[] buffer = new byte[(int) (endOffset - startOffset)];
             inputStream.read(buffer); // read till endOffset - startOffset bytes
 
             int recordCount = buffer.length / RECORD_SIZE;
@@ -114,6 +126,7 @@ public class DataManager {
             }
         } catch (Exception ex) {
             System.out.println("Exception occurred while reading file " + ex.getMessage());
+            ex.printStackTrace();
         }
 
         return sensorRecords;
@@ -126,7 +139,9 @@ public class DataManager {
             page.getRecords().add(sensorRecord);
         } else {
             // there is no space. Create a new page
-            page = new Page(blockNumber, List.of(sensorRecord));
+            List<SensorRecord> newList = new ArrayList<>();
+            newList.add(sensorRecord);
+            page = new Page(blockNumber + 1, newList);
             databaseBuffer.put(getDatabaseBufferKey(sensorRecord.getSensorID(), blockNumber), page);
         }
 
@@ -161,20 +176,20 @@ public class DataManager {
             randomAccessFile.writeLong(record.getTimestamp());
             randomAccessFile.writeInt(record.getHeartRate());
             randomAccessFile.close();
-        }catch (Exception e){
+        } catch (Exception e) {
             System.out.println("Failed to write sensor record " + e.getMessage());
         }
     }
 
     private static String getFilePath(int sensorID) {
-        return FILE_PREFIX + sensorID + ".bin" ;
+        return FILE_PREFIX + sensorID + ".bin";
     }
 
     private static void updateDisk(Page page) {
         int startOffset = page.getBlockNumber() * BLOCK_SIZE;
         int numberOfRecords = page.getRecords().size();
 
-        for (int i=0; i<numberOfRecords; i++) {
+        for (int i = 0; i < numberOfRecords; i++) {
             SensorRecord sensorRecord = page.getRecords().get(i);
             writeSensorRecord(sensorRecord, getFilePath(sensorRecord.getSensorID()), startOffset);
             startOffset += RECORD_SIZE;
@@ -182,23 +197,59 @@ public class DataManager {
     }
 
     private static void updateIndices(SensorRecord sensorRecord) {
+        int offset = (recordTracker.get(sensorRecord.getSensorID()) - 1) * RECORD_SIZE;
 
+        // TimeStamp Index:
+        ArrayList<Integer> offsets = timeStampTree.get(sensorRecord.getTimestamp());
+        if (offsets == null) {
+            offsets = new ArrayList<>();
+        }
+        offsets.add(offset);
+        timeStampTree.put(sensorRecord.getTimestamp(), offsets);
+        timeStampIndex.put(sensorRecord.getSensorID(), timeStampTree);
+
+        // X Location Index:
+        offsets = xLocTree.get(sensorRecord.getxLocation());
+        if (offsets == null) {
+            offsets = new ArrayList<>();
+        }
+        offsets.add(offset);
+        xLocTree.put(sensorRecord.getxLocation(), offsets);
+        xLocIndex.put(sensorRecord.getSensorID(), xLocTree);
+
+        // Y Location Index:
+        offsets = yLocTree.get(sensorRecord.getyLocation());
+        if (offsets == null) {
+            offsets = new ArrayList<>();
+        }
+        offsets.add(offset);
+        yLocTree.put(sensorRecord.getyLocation(), offsets);
+        yLocIndex.put(sensorRecord.getSensorID(), yLocTree);
+
+        // Heart Rate Index:
+        offsets = heartRateTree.get(sensorRecord.getHeartRate());
+        if (offsets == null) {
+            offsets = new ArrayList<>();
+        }
+        offsets.add(offset);
+        heartRateTree.put(sensorRecord.getHeartRate(), offsets);
+        heartRateIndex.put(sensorRecord.getSensorID(), heartRateTree);
     }
 
     private static SensorRecord populateRecord(String operationStr) {
         SensorRecord sensorRecord = new SensorRecord();
         String[] fields = operationStr.split(" ");
 
-        sensorRecord.setSensorID(Integer.parseInt(fields[1]));
-        sensorRecord.setxLocation(Integer.parseInt(fields[2]));
-        sensorRecord.setyLocation(Integer.parseInt(fields[3]));
-        sensorRecord.setTimestamp(Integer.parseInt(fields[4]));
-        sensorRecord.setHeartRate(Integer.parseInt(fields[5]));
+        sensorRecord.setSensorID(Integer.parseInt(fields[1].replaceAll("\\D", "")));
+        sensorRecord.setxLocation(Integer.parseInt(fields[2].replaceAll("\\D", "")));
+        sensorRecord.setyLocation(Integer.parseInt(fields[3].replaceAll("\\D", "")));
+        sensorRecord.setTimestamp(Integer.parseInt(fields[4].replaceAll("\\D", "")));
+        sensorRecord.setHeartRate(Integer.parseInt(fields[5].replaceAll("\\D", "")));
 
         return sensorRecord;
-     }
+    }
 
-     private static void addRecoveryRecord(int transactionID, SensorRecord sensorRecord) {
+    private static void addRecoveryRecord(int transactionID, SensorRecord sensorRecord) {
         if (recoveryRecords.containsKey(transactionID)) {
             recoveryRecords.get(transactionID).add(sensorRecord);
         } else {
@@ -206,35 +257,42 @@ public class DataManager {
             sensorRecords.add(sensorRecord);
             recoveryRecords.put(transactionID, sensorRecords);
         }
-     }
+    }
 
     public static void initNumberOfPages(int pages) {
         databaseBuffer = new LRUCache<>(pages);
-
         createLogFile();
     }
 
-    public static void readAllRecords(int sensorID, int transactionID) throws IOException {
-        int lastBlockInFile = recordTracker.get(sensorID) % 20;
+    public static void readAllRecords(String operation, int transactionID) throws IOException {
+        String[] splitString = operation.split(" ");
+        int sensorID = Integer.parseInt(splitString[1]);
+
+        int lastBlockInFile = 0;
+        if (!recordTracker.isEmpty()) {
+            lastBlockInFile = recordTracker.get(sensorID) % NUMBER_OF_RECORDS_IN_BLOCK;
+        }
 
         ArrayList<SensorRecord> allRecords = new ArrayList<>();
         for (int i = 0; i < lastBlockInFile; i++) {
-            // TODO: bring the block to memory if it doesn't exist
+            bringBlockToBufferIfNotExists(sensorID, i);
 
             // Adding all records from this block to allRecords
-            List<SensorRecord> recordsFromBlock = databaseBuffer.get(sensorID+"-"+i).getRecords();
+            List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, i)).getRecords();
             for (int j = 0; j < recordsFromBlock.size(); j++) {
                 allRecords.add(recordsFromBlock.get(j));
             }
         }
         // Reading from recovery record for same transaction
         List<SensorRecord> extraRecords = recoveryRecords.get(transactionID);
-        for (int k = 0; k < extraRecords.size(); k++) {
-            allRecords.add(extraRecords.get(k));
+        if (extraRecords != null) {
+            for (int k = 0; k < extraRecords.size(); k++) {
+                allRecords.add(extraRecords.get(k));
+            }
         }
         // Writing all records to log
         for (int l = 0; l < allRecords.size(); l++) {
-            logWriter.write("Read: ");
+            logWriter.write("\nRead: ");
             printRecordToLog(allRecords.get(l));
         }
     }
@@ -246,10 +304,10 @@ public class DataManager {
 
     private static void createLogFile() {
         try {
-            logWriter = new BufferedWriter(new FileWriter("src/output/logs.txt", true));
+            logWriter = new BufferedWriter(new FileWriter(FILE_PREFIX + "logs.txt", true));
             logWriter.write("Starting logging...");
             logWriter.flush();
-            System.out.print("Should have written to file");
+            System.out.print("Written to file");
         } catch (IOException e) {
             System.out.println("An error occurred while writing to log file");
             e.printStackTrace();
@@ -257,59 +315,97 @@ public class DataManager {
     }
 
     private static void M(String operation) throws IOException {
-        // TODO format : M ID p val
         String[] splitString = operation.split(" ");
 
-        if (splitString[2].equals("H")){
+        if (splitString[2].equals("H")) {
             heartRateM(Integer.parseInt(splitString[1]), Integer.parseInt(splitString[3]));
         } else if (splitString[2].equals("L")) {
-            // TODO parse the array structure, extract numbers
             int xVal = Integer.parseInt(splitString[3].replaceAll("\\D", ""));
             int yVal = Integer.parseInt(splitString[4].replaceAll("\\D", ""));
-            locationM(Integer.parseInt(splitString[1]), xVal, yVal);
+            locationMM(Integer.parseInt(splitString[1]), xVal, yVal);
         } else if (splitString[2].equals("T")) {
-            // TODO parse the array structure, extract numbers
             long ts1 = Long.parseLong(splitString[3].replaceAll("\\D", ""));
             long ts2 = Long.parseLong(splitString[4].replaceAll("\\D", ""));
             timestampM(Integer.parseInt(splitString[1]), ts1, ts2);
         }
     }
 
-    private static void heartRateM(int sensorID, int heartVal) throws IOException {
-        TreeMap<Integer, Integer> heartRate = heartRateIndex.get(sensorID);
-        int offset = heartRate.get(0);
-        int blockID = offset / 480;
-        // TODO bring into memory if not in buffer
-        List<SensorRecord> recordsFromBlock = databaseBuffer.get(sensorID+"-"+blockID).getRecords();
-        int entryIndex = (offset - (blockID * 480)) / 24;
-        SensorRecord r = recordsFromBlock.get(entryIndex);
-        logWriter.write("MRead: ");
-        printRecordToLog(r);
+    public static void heartRateM(int sensorID, int heartVal) throws IOException {
+        TreeMap<Integer, ArrayList<Integer>> heartRate = heartRateIndex.get(sensorID);
+        ArrayList<Integer> heartRateOffsets = heartRate.get(heartVal);
+
+        for (Integer offset : heartRateOffsets) {
+            int blockID = offset / BLOCK_SIZE;
+            bringBlockToBufferIfNotExists(sensorID, blockID);
+            List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
+            int entryIndex = (offset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
+            SensorRecord r = recordsFromBlock.get(entryIndex);
+
+            logWriter.write("\nMRead: ");
+            printRecordToLog(r);
+        }
+
+    }
+
+    private static void locationMM(int sensorID, int xVal, int yVal) throws IOException {
+        Set<Integer> xValues = new HashSet<>();
+        Set<Integer> yValues = new HashSet<>();
+
+        xValues.addAll(xLocIndex.get(sensorID).getOrDefault(xVal - 1, new ArrayList<>()));
+        xValues.addAll(xLocIndex.get(sensorID).getOrDefault(xVal, new ArrayList<>()));
+        xValues.addAll(xLocIndex.get(sensorID).getOrDefault(xVal + 1, new ArrayList<>()));
+        yValues.addAll(yLocIndex.get(sensorID).getOrDefault(yVal - 1, new ArrayList<>()));
+        yValues.addAll(yLocIndex.get(sensorID).getOrDefault(yVal, new ArrayList<>()));
+        yValues.addAll(yLocIndex.get(sensorID).getOrDefault(yVal + 1, new ArrayList<>()));
+
+        xValues.retainAll(yValues);
+
+        for (Integer offset : xValues) {
+            int blockID = offset / BLOCK_SIZE;
+            bringBlockToBufferIfNotExists(sensorID, blockID);
+            List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
+            int entryIndex = (offset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
+            SensorRecord r = recordsFromBlock.get(entryIndex);
+
+            logWriter.write("\nLocation including given MRead: ");
+            printRecordToLog(r);
+            System.out.println(offset);
+        }
     }
 
     private static void locationM(int sensorID, int xVal, int yVal) throws IOException {
-        TreeMap<Integer, Integer> xLoc = xLocIndex.get(sensorID);
-        TreeMap<Integer, Integer> yLoc = yLocIndex.get(sensorID);
-
-        int x = xLoc.get(xVal);
-        int y = yLoc.get(yVal);
+        TreeMap<Integer, ArrayList<Integer>> xLoc = xLocIndex.get(sensorID);
+        TreeMap<Integer, ArrayList<Integer>> yLoc = yLocIndex.get(sensorID);
 
         // code to get points 1 mile away from <x, y>
-        for (int i = x - 1; i <= x + 1; i++) {
-            for (int j = y - 1; j <= y + 1; j++) {
-                if (i != x || j != y) { // exclude the given point
-                    System.out.println("<" + i + "," + j + ">"); // print the pair of points
-                    int currX = xLoc.get(i); // offset of x
-                    int currY = yLoc.get(j); // offset of y
+        for (int i = xVal - 1; i <= xVal + 1; i++) {
+            for (int j = yVal - 1; j <= yVal + 1; j++) {
+                if (i == xVal && j == yVal) {
+                    continue;
+                }// exclude the given point
 
-                    int blockID = currX / 480;
-                    // TODO bring into memory if not in buffer
+                System.out.println("<" + i + "," + j + ">"); // print the pair of points
 
-                    List<SensorRecord> recordsFromBlock = databaseBuffer.get(sensorID+"-"+blockID).getRecords();
-                    int entryIndex = (currX - (blockID * 480)) / 24;
-                    SensorRecord r = recordsFromBlock.get(entryIndex);
-                    if (r.getyLocation() == currY) {
-                        logWriter.write("MRead: ");
+                ArrayList<Integer> xOffsets = xLoc.get(i); // offsets of x
+                ArrayList<Integer> yOffsets = yLoc.get(j); // offsets of y
+
+                if (xOffsets != null && yOffsets != null) {
+                    System.out.println("entered block for " + i + ", " + j);
+
+                    System.out.println("xoffsets" + xOffsets);
+                    System.out.println("yoffsets" + yOffsets);
+
+                    xOffsets.retainAll(yOffsets);
+                    System.out.println("Size of xOffsets after retainAll: " + xOffsets.size());
+                    for (Integer offset : xOffsets) {
+                        System.out.println("entered second block for " + i + ", " + j);
+                        int blockID = offset / BLOCK_SIZE;
+                        bringBlockToBufferIfNotExists(sensorID, blockID);
+                        List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
+                        int entryIndex = (offset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
+                        SensorRecord r = recordsFromBlock.get(entryIndex);
+
+                        logWriter.write("\nLocation MRead: ");
                         printRecordToLog(r);
                     }
                 }
@@ -318,30 +414,31 @@ public class DataManager {
     }
 
     private static void timestampM(int sensorID, long ts1, long ts2) throws IOException {
-        TreeMap<Long, Integer> timeStamp = timeStampIndex.get(sensorID);
-        NavigableMap<Long, Integer> subMap = timeStamp.subMap(ts1, true, ts2, true);
-        for (Map.Entry<Long, Integer> entry : subMap.entrySet()) {
-            int blockID = entry.getValue() / 480;
+        TreeMap<Long, ArrayList<Integer>> timeStamp = timeStampIndex.get(sensorID);
+        NavigableMap<Long, ArrayList<Integer>> subMap = timeStamp.subMap(ts1, true, ts2, true);
 
-            // TODO check if sensorID-blockID for that offset is in cache, if not, bring in cache
+        for (Map.Entry<Long, ArrayList<Integer>> entry : subMap.entrySet()) {
+            ArrayList<Integer> timeStampOffsets = entry.getValue();
+            for (Integer timeStampOffset : timeStampOffsets) {
+                int blockID = timeStampOffset / BLOCK_SIZE;
+                bringBlockToBufferIfNotExists(sensorID, blockID);
+                List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
+                int entryIndex = (timeStampOffset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
+                SensorRecord r = recordsFromBlock.get(entryIndex);
 
-
-            List<SensorRecord> recordsFromBlock = databaseBuffer.get(sensorID+"-"+blockID).getRecords();
-            int entryIndex = (entry.getValue() - (blockID * 480)) / 24;
-            SensorRecord r = recordsFromBlock.get(entryIndex);
-            logWriter.write("MRead: ");
-            printRecordToLog(r);
+                logWriter.write("\nMRead: ");
+                printRecordToLog(r);
+            }
         }
     }
 
     private static void G(String operation) throws IOException {
-        // TODO format : G ID op p val
         String[] splitString = operation.split(" ");
 
         if (splitString[3].equals("T")) {
             long ts1 = Long.parseLong(splitString[4].replaceAll("\\D", ""));
             long ts2 = Long.parseLong(splitString[5].replaceAll("\\D", ""));
-            logWriter.write("G: " + timestampG(Integer.parseInt(splitString[1]), splitString[2], ts1, ts2));
+            logWriter.write("\nG: " + timestampG(Integer.parseInt(splitString[1]), splitString[2], ts1, ts2));
         } else if (splitString[3].equals("L")) {
             int xVal = Integer.parseInt(splitString[4].replaceAll("\\D", ""));
             int yVal = Integer.parseInt(splitString[5].replaceAll("\\D", ""));
@@ -352,32 +449,33 @@ public class DataManager {
 
     private static int timestampG(int sensorID, String op, long ts1, long ts2) {
         ArrayList<Integer> heartRateResult = new ArrayList<>();
-        TreeMap<Long, Integer> timeStamp = timeStampIndex.get(sensorID);
-        NavigableMap<Long, Integer> subMap = timeStamp.subMap(ts1, true, ts2, true);
+        TreeMap<Long, ArrayList<Integer>> timeStamp = timeStampIndex.get(sensorID);
+        NavigableMap<Long, ArrayList<Integer>> subMap = timeStamp.subMap(ts1, true, ts2, true);
 
-        for (Map.Entry<Long, Integer> entry : subMap.entrySet()) {
-            int blockID = entry.getValue() / 480;
+        for (Map.Entry<Long, ArrayList<Integer>> entry : subMap.entrySet()) {
+            ArrayList<Integer> timeStampOffsets = entry.getValue();
+            for (Integer timeStampOffset : timeStampOffsets) {
+                int blockID = timeStampOffset / BLOCK_SIZE;
+                bringBlockToBufferIfNotExists(sensorID, blockID);
+                List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
+                int entryIndex = (timeStampOffset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
+                SensorRecord r = recordsFromBlock.get(entryIndex);
 
-            // TODO check if sensorID-blockID for that offset is in cache, if not, bring in cache
-
-
-            List<SensorRecord> recordsFromBlock = databaseBuffer.get(sensorID+"-"+blockID).getRecords();
-            int entryIndex = (entry.getValue() - (blockID * 480)) / 24;
-            SensorRecord r = recordsFromBlock.get(entryIndex);
-            int heart_val = r.getHeartRate();
-            heartRateResult.add(heart_val);
+                int heart_val = r.getHeartRate();
+                heartRateResult.add(heart_val);
+            }
         }
         return aggregationG(op, heartRateResult);
     }
 
-    private static void locationG(int sensorID, int xVal, int yVal) {
-        // TODO change return type to int
+    private static int locationG(int sensorID, int xVal, int yVal) {
         ArrayList<Integer> heartRateResult = new ArrayList<>();
-        TreeMap<Integer, Integer> xLoc = xLocIndex.get(sensorID);
-        TreeMap<Integer, Integer> yLoc = yLocIndex.get(sensorID);
-        NavigableMap<Integer, Integer> xSubMap = xLoc.subMap(xVal, true, yVal, true);
-        NavigableMap<Integer, Integer> ySubMap = xLoc.subMap(xVal, true, yVal, true);
+        TreeMap<Integer, ArrayList<Integer>> xLoc = xLocIndex.get(sensorID);
+        TreeMap<Integer, ArrayList<Integer>> yLoc = yLocIndex.get(sensorID);
+        NavigableMap<Integer, ArrayList<Integer>> xSubMap = xLoc.subMap(xVal, true, yVal, true);
+        NavigableMap<Integer, ArrayList<Integer>> ySubMap = xLoc.subMap(xVal, true, yVal, true);
         // TODO figure out how to aggregate when only one point is given
+        return 0;
     }
 
     private static int aggregationG(String op, ArrayList<Integer> heartRates) {
@@ -387,7 +485,7 @@ public class DataManager {
         } else if (op.equals("max")) {
             result = Collections.max(heartRates);
         } else if (op.equals("avg")) {
-            result = (int)heartRates.stream().mapToDouble(num->num).average().orElse(0.0);
+            result = (int) heartRates.stream().mapToDouble(num -> num).average().orElse(0.0);
         }
         return result;
     }

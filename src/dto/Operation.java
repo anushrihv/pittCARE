@@ -54,7 +54,17 @@ public class Operation {
 
     public boolean isReadOperation() {
         char operation = getOperationStr().charAt(0);
-        return operation == 'R' || operation == 'M' || operation == 'G';
+        return operation == 'R';
+    }
+
+    public boolean isMOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'M';
+    }
+
+    public boolean isGOperation() {
+        char operation = getOperationStr().charAt(0);
+        return operation == 'G';
     }
 
     public boolean isWriteOperation() {
@@ -74,7 +84,7 @@ public class Operation {
 
     public Integer getSensorID() {
         if (isReadOrWriteOperation()) {
-            return Integer.valueOf(operationStr.split(" ")[1]);
+            return Integer.valueOf(operationStr.split(" ")[1].replaceAll("\\D", ""));
         } else {
             return null;
         }
