@@ -224,15 +224,16 @@ public class Scheduler {
     }
 
     private static LockType findLockRequested(int transactionID) {
-        Operation firstOperation = transactionOperations.get(transactionID).get(0);
-        if (firstOperation != null) {
-            if (firstOperation.isReadOperation()) {
-                return LockType.READLOCK;
-            } else if (firstOperation.isWriteOperation()) {
-                return LockType.WRITELOCK;
+        if (transactionOperations.get(transactionID).size() != 0) {
+            Operation firstOperation = transactionOperations.get(transactionID).get(0);
+            if (firstOperation != null) {
+                if (firstOperation.isReadOperation()) {
+                    return LockType.READLOCK;
+                } else if (firstOperation.isWriteOperation()) {
+                    return LockType.WRITELOCK;
+                }
             }
         }
-
         return null;
     }
 

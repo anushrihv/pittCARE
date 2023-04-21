@@ -26,15 +26,15 @@ public class DataManager {
     private static final Map<Integer, Integer> recordTracker = new HashMap<>();
     private static final String FILE_PREFIX = "src/output/";
 
-    private static Map<Integer, TreeMap<Long, ArrayList<Integer>>> timeStampIndex = new HashMap<>();
-    private static Map<Integer, TreeMap<Integer, ArrayList<Integer>>> xLocIndex = new HashMap<>();
-    private static Map<Integer, TreeMap<Integer, ArrayList<Integer>>> yLocIndex = new HashMap<>();
-    public static Map<Integer, TreeMap<Integer, ArrayList<Integer>>> heartRateIndex = new HashMap<>();
+    private static final Map<Integer, TreeMap<Long, ArrayList<Integer>>> timeStampIndex = new HashMap<>();
+    private static final Map<Integer, TreeMap<Integer, ArrayList<Integer>>> xLocIndex = new HashMap<>();
+    private static final Map<Integer, TreeMap<Integer, ArrayList<Integer>>> yLocIndex = new HashMap<>();
+    public static final Map<Integer, TreeMap<Integer, ArrayList<Integer>>> heartRateIndex = new HashMap<>();
 
-    private static TreeMap<Long, ArrayList<Integer>> timeStampTree = new TreeMap<>();
-    private static TreeMap<Integer, ArrayList<Integer>> xLocTree = new TreeMap<>();
-    private static TreeMap<Integer, ArrayList<Integer>> yLocTree = new TreeMap<>();
-    public static TreeMap<Integer, ArrayList<Integer>> heartRateTree = new TreeMap<>();
+    private static final TreeMap<Long, ArrayList<Integer>> timeStampTree = new TreeMap<>();
+    private static final TreeMap<Integer, ArrayList<Integer>> xLocTree = new TreeMap<>();
+    private static final TreeMap<Integer, ArrayList<Integer>> yLocTree = new TreeMap<>();
+    public static final TreeMap<Integer, ArrayList<Integer>> heartRateTree = new TreeMap<>();
 
     private static BufferedWriter logWriter;
 
@@ -44,6 +44,8 @@ public class DataManager {
         if (operation.isWriteOperation()) {
             SensorRecord sensorRecord = populateRecord(operation.getOperationStr());
             addRecoveryRecord(operation.getTransactionID(), sensorRecord);
+            logWriter.write("\n"+operation.getOperationStr());
+            logWriter.flush();
         } else if (operation.isCommitOperation()) {
             performCommit(operation.getTransactionID());
             recoveryRecords.remove(operation.getTransactionID());
@@ -58,7 +60,7 @@ public class DataManager {
         }
     }
 
-    private static void performCommit(int transactionID) {
+    private static void performCommit(int transactionID) throws IOException {
         if (recoveryRecords.containsKey(transactionID)) {
             // get all records written by this transaction
             List<SensorRecord> sensorRecords = recoveryRecords.get(transactionID);
@@ -81,7 +83,7 @@ public class DataManager {
         return totalNumberOfRecords / NUMBER_OF_RECORDS_IN_BLOCK;
     }
 
-    private static Page bringBlockToBufferIfNotExists(int sensorID, int blockNumber) {
+    private static Page bringBlockToBufferIfNotExists(int sensorID, int blockNumber) throws IOException {
         String key = sensorID + "-" + blockNumber;
         if (!databaseBuffer.containsKey(key)) {
             // read the corresponding block in the file
@@ -90,6 +92,8 @@ public class DataManager {
             List<SensorRecord> sensorRecords = readSensorFile(getFilePath(sensorID), startOffset, endOffset);
             Page page = new Page(blockNumber, sensorRecords);
             databaseBuffer.put(key, page);
+            logWriter.write("\nSWAP F-"+sensorID + " P-" + blockNumber);
+            logWriter.flush();
             return page;
         } else {
             return databaseBuffer.get(key);
@@ -132,7 +136,7 @@ public class DataManager {
         return sensorRecords;
     }
 
-    private static Page updateMemory(SensorRecord sensorRecord, int blockNumber) {
+    private static Page updateMemory(SensorRecord sensorRecord, int blockNumber) throws IOException {
         Page page = bringBlockToBufferIfNotExists(sensorRecord.getSensorID(), blockNumber);
         if (page.getRecords().size() < NUMBER_OF_RECORDS_IN_BLOCK) {
             // there is space in the existing page
@@ -142,6 +146,8 @@ public class DataManager {
             List<SensorRecord> newList = new ArrayList<>();
             newList.add(sensorRecord);
             page = new Page(blockNumber + 1, newList);
+            logWriter.write("\nCREATE F-"+sensorRecord.getSensorID() + " P-" + blockNumber);
+            logWriter.flush();
             databaseBuffer.put(getDatabaseBufferKey(sensorRecord.getSensorID(), blockNumber), page);
         }
 
@@ -259,7 +265,7 @@ public class DataManager {
         }
     }
 
-    public static void initNumberOfPages(int pages) {
+    public static void initNumberOfPages(int pages) throws IOException {
         databaseBuffer = new LRUCache<>(pages);
         createLogFile();
     }
@@ -269,7 +275,7 @@ public class DataManager {
         int sensorID = Integer.parseInt(splitString[1]);
 
         int lastBlockInFile = 0;
-        if (!recordTracker.isEmpty()) {
+        if (recordTracker.get(sensorID) != null) {
             lastBlockInFile = recordTracker.get(sensorID) % NUMBER_OF_RECORDS_IN_BLOCK;
         }
 
@@ -415,21 +421,27 @@ public class DataManager {
 
     private static void timestampM(int sensorID, long ts1, long ts2) throws IOException {
         TreeMap<Long, ArrayList<Integer>> timeStamp = timeStampIndex.get(sensorID);
-        NavigableMap<Long, ArrayList<Integer>> subMap = timeStamp.subMap(ts1, true, ts2, true);
+        if (timeStamp != null) {
+            NavigableMap<Long, ArrayList<Integer>> subMap = timeStamp.subMap(ts1, true, ts2, true);
 
-        for (Map.Entry<Long, ArrayList<Integer>> entry : subMap.entrySet()) {
-            ArrayList<Integer> timeStampOffsets = entry.getValue();
-            for (Integer timeStampOffset : timeStampOffsets) {
-                int blockID = timeStampOffset / BLOCK_SIZE;
-                bringBlockToBufferIfNotExists(sensorID, blockID);
-                List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
-                int entryIndex = (timeStampOffset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
-                SensorRecord r = recordsFromBlock.get(entryIndex);
+            for (Map.Entry<Long, ArrayList<Integer>> entry : subMap.entrySet()) {
+                ArrayList<Integer> timeStampOffsets = entry.getValue();
+                for (Integer timeStampOffset : timeStampOffsets) {
+                    int blockID = timeStampOffset / BLOCK_SIZE;
+                    bringBlockToBufferIfNotExists(sensorID, blockID);
+                    List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();
+                    int entryIndex = (timeStampOffset - (blockID * BLOCK_SIZE)) / RECORD_SIZE;
+                    SensorRecord r = recordsFromBlock.get(entryIndex);
 
-                logWriter.write("\nMRead: ");
-                printRecordToLog(r);
+                    logWriter.write("\nMRead: ");
+                    printRecordToLog(r);
+                }
             }
+        } else {
+            logWriter.write("\nMRead: Null");
+            logWriter.flush();
         }
+
     }
 
     private static void G(String operation) throws IOException {
@@ -447,7 +459,7 @@ public class DataManager {
         logWriter.flush();
     }
 
-    private static int timestampG(int sensorID, String op, long ts1, long ts2) {
+    private static int timestampG(int sensorID, String op, long ts1, long ts2) throws IOException {
         ArrayList<Integer> heartRateResult = new ArrayList<>();
         TreeMap<Long, ArrayList<Integer>> timeStamp = timeStampIndex.get(sensorID);
         NavigableMap<Long, ArrayList<Integer>> subMap = timeStamp.subMap(ts1, true, ts2, true);
