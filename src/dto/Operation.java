@@ -84,6 +84,7 @@ public class Operation {
 
     public Integer getSensorID() {
         if (isReadOrWriteOperation()) {
+            //return Integer.valueOf(operationStr.split(" ")[1]);
             return Integer.valueOf(operationStr.split(" ")[1].replaceAll("\\D", ""));
         } else {
             return null;
