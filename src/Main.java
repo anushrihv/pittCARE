@@ -31,21 +31,6 @@ public class Main {
         DataManager.initNumberOfPages(bufferSize);
         // Running the Transaction Manager:
         TransactionManager.getTransactions(seed, concurrencyType);
-//
-//        DataManager.executeOperation(new Operation(1, 1, "I 3 30 30 1678407650 5"));
-//        DataManager.executeOperation(new Operation(1, 1, "I 3 30 31 1678407650 6"));
-//        DataManager.executeOperation(new Operation(1, 1, "I 3 32 32 1678407650 6"));
-//
-//        DataManager.executeOperation(new Operation(1, 1, "I 3 31 31 1678407651 6"));
-//        DataManager.executeOperation(new Operation(1, 1, "I 3 29 30 1678407651 8"));
-//        DataManager.executeOperation(new Operation(1, 1, "I 3 28 30 1678407652 9"));
-//        DataManager.executeOperation(new Operation(1, 1, "C"));
-//        DataManager.executeOperation(new Operation(1, 1, "M 3 H 6"));
-//        DataManager.executeOperation(new Operation(1, 1, "G 3 max T [1678407651, 1678407652]"));
-//        DataManager.executeOperation(new Operation(1, 1, "M 3 L [30, 30]"));
-//        DataManager.executeOperation(new Operation(1, 1, "R 3"));
-//        DataManager.executeOperation(new Operation(1, 1, "M 3 T [1678407650, 1678407652]"));
-
 
     }
 }
