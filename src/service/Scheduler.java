@@ -234,6 +234,8 @@ public class Scheduler {
                         lockDetails.getReadLockOwners().remove(readLockOwner);
                         lockDetails.setWriteLockOwner(readLockOwner);
                         return operationToSend;
+                    } else if(operationToSend.isCommitOperation()) {
+                        return operationToSend;
                     }
                 }
             }
@@ -257,6 +259,9 @@ public class Scheduler {
         Set<Integer> waitingTransactions = lockDetails.getWaitingTransactions();
 
         for (int waitingTransaction : waitingTransactions) {
+            if(transactionOperations.get(waitingTransaction).get(0).isCommitOperation()) {
+                return waitingTransaction;
+            }
             LockType lockRequested = findLockRequested(waitingTransaction);
             if (lockRequested != null && locksCompatible(lockRequested, currentLock)) {
                 // locks do not conflict
