@@ -74,6 +74,8 @@ public class Scheduler {
                         }
                     } while (operationToSend != null);
                 }
+
+                sendOperationToDataManager(operation);
             }
         }
     }
