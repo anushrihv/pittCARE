@@ -19,7 +19,7 @@ import java.util.*;
 
 public class DataManager {
     private static final int RECORD_SIZE = 24;
-    private static final int NUMBER_OF_RECORDS_IN_BLOCK = 3;
+    private static final int NUMBER_OF_RECORDS_IN_BLOCK = 2;
     private static final int BLOCK_SIZE = RECORD_SIZE * NUMBER_OF_RECORDS_IN_BLOCK;
     public static LRUCache<String, Page> databaseBuffer;
     private static final Map<Integer, List<SensorRecord>> recoveryRecords = new HashMap<>();
@@ -195,6 +195,7 @@ public class DataManager {
     }
 
     private static void updateDisk(Page page) {
+        System.out.println("Entered update disk for ");
         int startOffset = page.getBlockNumber() * BLOCK_SIZE;
         int numberOfRecords = page.getRecords().size();
 
@@ -277,7 +278,7 @@ public class DataManager {
         String[] splitString = operation.split(" ");
         int sensorID = Integer.parseInt(splitString[1]);
 
-        int lastBlockInFile = 0;
+        int lastBlockInFile = -1;
         if (recordTracker.get(sensorID) != null) {
             lastBlockInFile = recordTracker.get(sensorID) % NUMBER_OF_RECORDS_IN_BLOCK;
         }
@@ -289,6 +290,8 @@ public class DataManager {
             // Adding all records from this block to allRecords
             List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, i)).getRecords();
             for (int j = 0; j < recordsFromBlock.size(); j++) {
+                System.out.println("record from block: "+recordsFromBlock.get(j));
+
                 allRecords.add(recordsFromBlock.get(j));
             }
         }
@@ -296,7 +299,9 @@ public class DataManager {
         List<SensorRecord> extraRecords = recoveryRecords.get(transactionID);
         if (extraRecords != null) {
             for (int k = 0; k < extraRecords.size(); k++) {
-                allRecords.add(extraRecords.get(k));
+                if (extraRecords.get(k).getSensorID() == sensorID) {
+                    allRecords.add(extraRecords.get(k));
+                }
             }
         }
         // Writing all records to log
@@ -424,6 +429,7 @@ public class DataManager {
 
     private static void timestampM(int sensorID, long ts1, long ts2) throws IOException {
         TreeMap<Long, ArrayList<Integer>> timeStamp = timeStampIndex.get(sensorID);
+
         if (timeStamp != null) {
             NavigableMap<Long, ArrayList<Integer>> subMap = timeStamp.subMap(ts1, true, ts2, true);
 

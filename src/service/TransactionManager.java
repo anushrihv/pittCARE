@@ -62,9 +62,12 @@ public class TransactionManager {
 
                         //TODO Send operation to Scheduler
                         Scheduler.scheduleOperation(op);
+
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(k));
+                            System.out.println("Removing transaction table entry");
                             fileNames.remove(files.get(k));
+                            //continue;
                         }
                     }
                     // read next line in file through buffered reader:
@@ -76,6 +79,7 @@ public class TransactionManager {
                 break;
             }
         }
+
         // Closing the BufferedReaders
         for (BufferedReader reader : readers) {
             reader.close();
