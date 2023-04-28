@@ -39,8 +39,9 @@ public class DataManager {
     private static BufferedWriter logWriter;
 
     public static void executeOperation(Operation operation) throws IOException {
-        System.out.println("Operation received for transaction " + operation.getTransactionID() +
-                " for operation " + operation.getOperationStr());
+        System.out.println("Data Manager received operation " + operation.getOperationStr() +
+                " for transaction ID " + operation.getTransactionID());
+        System.out.println();
         if (operation.isWriteOperation()) {
             SensorRecord sensorRecord = populateRecord(operation.getOperationStr());
             addRecoveryRecord(operation.getTransactionID(), sensorRecord);
@@ -313,7 +314,7 @@ public class DataManager {
             logWriter = new BufferedWriter(new FileWriter(FILE_PREFIX + "logs.txt", true));
             logWriter.write("Starting logging...");
             logWriter.flush();
-            System.out.print("Written to file");
+            //System.out.print("Written to file");
         } catch (IOException e) {
             System.out.println("An error occurred while writing to log file");
             e.printStackTrace();
@@ -375,7 +376,7 @@ public class DataManager {
 
             logWriter.write("\nLocation including given MRead: ");
             printRecordToLog(r);
-            System.out.println(offset);
+            //System.out.println(offset);
         }
     }
 
@@ -390,21 +391,21 @@ public class DataManager {
                     continue;
                 }// exclude the given point
 
-                System.out.println("<" + i + "," + j + ">"); // print the pair of points
+                //System.out.println("<" + i + "," + j + ">"); // print the pair of points
 
                 ArrayList<Integer> xOffsets = xLoc.get(i); // offsets of x
                 ArrayList<Integer> yOffsets = yLoc.get(j); // offsets of y
 
                 if (xOffsets != null && yOffsets != null) {
-                    System.out.println("entered block for " + i + ", " + j);
-
-                    System.out.println("xoffsets" + xOffsets);
-                    System.out.println("yoffsets" + yOffsets);
+//                    System.out.println("entered block for " + i + ", " + j);
+//
+//                    System.out.println("xoffsets" + xOffsets);
+//                    System.out.println("yoffsets" + yOffsets);
 
                     xOffsets.retainAll(yOffsets);
-                    System.out.println("Size of xOffsets after retainAll: " + xOffsets.size());
+                    //System.out.println("Size of xOffsets after retainAll: " + xOffsets.size());
                     for (Integer offset : xOffsets) {
-                        System.out.println("entered second block for " + i + ", " + j);
+                        //System.out.println("entered second block for " + i + ", " + j);
                         int blockID = offset / BLOCK_SIZE;
                         bringBlockToBufferIfNotExists(sensorID, blockID);
                         List<SensorRecord> recordsFromBlock = databaseBuffer.get(getDatabaseBufferKey(sensorID, blockID)).getRecords();

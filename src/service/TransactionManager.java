@@ -54,10 +54,10 @@ public class TransactionManager {
                         op.setTransactionID(transactionTable.get(files.get(k)).getTransactionID());
                         op.setIsolationLevel(transactionTable.get(files.get(k)).getIsolationLevel());
                         op.setOperationStr(operations[k]);
-                        System.out.println("Printing operation:");
-                        System.out.println(op.getTransactionID());
-                        System.out.println(op.getIsolationLevel());
-                        System.out.println(op.getOperationStr());
+//                        System.out.println("Printing operation:");
+//                        System.out.println(op.getTransactionID());
+//                        System.out.println(op.getIsolationLevel());
+//                        System.out.println(op.getOperationStr());
 
 
                         //TODO Send operation to Scheduler
@@ -132,10 +132,10 @@ public class TransactionManager {
                         //TODO Send operation to Scheduler
                         //Scheduler.scheduleOperation(op);
 
-                        System.out.println("Printing operation:");
-                        System.out.println(op.getTransactionID());
-                        System.out.println(op.getIsolationLevel());
-                        System.out.println(op.getOperationStr());
+//                        System.out.println("Printing operation:");
+//                        System.out.println(op.getTransactionID());
+//                        System.out.println(op.getIsolationLevel());
+//                        System.out.println(op.getOperationStr());
                         if (splitString[0].equals("C") || splitString[0].equals("A")) {
                             transactionTable.remove(files.get(index));
                             fileNames.remove(files.get(index));

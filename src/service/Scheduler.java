@@ -36,6 +36,9 @@ public class Scheduler {
      * @param operation
      */
     public static void scheduleOperation(Operation operation) throws IOException {
+        System.out.println("Scheduler received operation " + operation.getOperationStr() +
+                " for transaction ID " + operation.getTransactionID());
+        System.out.println();
         addTransactionOperation(operation);
         Integer sensorID = operation.getSensorID();
         if(sensorID != null) {
@@ -50,7 +53,57 @@ public class Scheduler {
                     sendOperationToDataManager(operationToSend);
                 }
             } while (operationToSend != null);
+        } else {
+            // commit operation
+            List<Operation> operations = transactionOperations.get(operation.getTransactionID());
+            if (operations.get(0).isCommitOperation()) {
+                // find all locks held by this transaction and release
+                List<Integer> sensorIDs = getAllSensorIDsToRelease(operation.getTransactionID());
+                List<LockDetails> locksHeldByTransaction = getAllLocksHeldByTransaction(operation.getTransactionID());
+                for(LockDetails lockHeldByTransaction : locksHeldByTransaction) {
+                    releaseLock(operation.getTransactionID(), lockHeldByTransaction);
+                }
+
+                for(int sensorIDToOperate : sensorIDs) {
+                    Operation operationToSend = null;
+                    do {
+                        operationToSend = resolveWaitingTransaction(sensorIDToOperate);
+                        if (operationToSend != null) {
+                            lockTable.get(sensorIDToOperate).getWaitingTransactions().remove(operationToSend.getTransactionID());
+                            sendOperationToDataManager(operationToSend);
+                        }
+                    } while (operationToSend != null);
+                }
+            }
         }
+    }
+
+    private static List<LockDetails> getAllLocksHeldByTransaction(int transactionID) {
+        List<LockDetails> locksHeldByTransaction = new ArrayList<>();
+        for(int sensorID : lockTable.keySet()) {
+            LockDetails lockDetails = lockTable.get(sensorID);
+            if(lockDetails.getWriteLockOwner() != null && transactionID == lockDetails.getWriteLockOwner()) {
+                locksHeldByTransaction.add(lockDetails);
+            } else if (lockDetails.getReadLockOwners().contains(transactionID)) {
+                locksHeldByTransaction.add(lockDetails);
+            }
+        }
+
+        return locksHeldByTransaction;
+    }
+
+    private static List<Integer> getAllSensorIDsToRelease(int transactionID) {
+        List<Integer> sensorIDs = new ArrayList<>();
+        for(int sensorID : lockTable.keySet()) {
+            LockDetails lockDetails = lockTable.get(sensorID);
+            if(lockDetails.getWriteLockOwner() != null && transactionID == lockDetails.getWriteLockOwner()) {
+                sensorIDs.add(sensorID);
+            } else if (lockDetails.getReadLockOwners().contains(transactionID)) {
+                sensorIDs.add(sensorID);
+            }
+        }
+
+        return sensorIDs;
     }
 
     public static void printLockTable() {
@@ -124,7 +177,7 @@ public class Scheduler {
     }
 
     private static void releaseLock(int transactionID, LockDetails lockDetails) {
-        if (lockDetails.getWriteLockOwner().equals(transactionID)) {
+        if (lockDetails.getWriteLockOwner()!=null && lockDetails.getWriteLockOwner().equals(transactionID)) {
             // remove write lock owner
             lockDetails.setWriteLockOwner(null);
             if (lockDetails.getReadLockOwners().isEmpty()) {
