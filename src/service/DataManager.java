@@ -113,7 +113,7 @@ public class DataManager {
         return record;
     }
 
-    private static List<SensorRecord> readSensorFile(String filePath, int startOffset, int endOffset) {
+    private static List<SensorRecord> readSensorFile(String filePath, int startOffset, int endOffset) throws IOException {
         List<SensorRecord> sensorRecords = new ArrayList<>();
         try {
             FileInputStream inputStream = new FileInputStream(filePath);
@@ -130,8 +130,10 @@ public class DataManager {
                 sensorRecords.add(sensorRecord);
             }
         } catch (Exception ex) {
-            System.out.println("Exception occurred while reading file " + ex.getMessage());
-            ex.printStackTrace();
+            //System.out.println("Exception occurred while reading file " + ex.getMessage());
+            //ex.printStackTrace();
+            logWriter.write("Nothing to read");
+            logWriter.flush();
         }
 
         return sensorRecords;
